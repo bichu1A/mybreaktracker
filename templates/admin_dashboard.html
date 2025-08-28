@@ -1,0 +1,50 @@
+
+{% extends 'base.html' %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block content %}
+<style>
+    /* Page-specific override if needed */
+    body {
+        background-image: url('{{ url_for('static', filename='img-2.png') }}');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        min-height: 100vh;
+        margin: 0;
+    }
+</style>
+<div class="holo-card fade-in">
+    <h1 class="neon-text">Admin Dashboard</h1>
+    <p>Welcome, {{ current_user.username }}!</p>
+    <a href="{{ url_for('change_password') }}" class="btn btn-secondary mb-3 neon-button">Change Password</a>
+    <a href="{{ url_for('add_employee') }}" class="btn btn-primary mb-3 neon-button">Add New Employee</a>
+    <a href="{{ url_for('break_logs') }}" class="btn btn-info mb-3 neon-button">View All Break Logs</a>
+    <a href="{{ url_for('date_filtered_break_logs') }}" class="btn btn-info mb-3 neon-button">View Date-Filtered Break Logs</a>
+    <a href="{{ url_for('download_all_reports') }}" class="btn btn-secondary mb-3 neon-button">Download All Reports</a>
+    <h3 class="neon-text">Employees</h3>
+    {% if employees %}
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for employee in employees %}
+            <tr class="fade-in">
+                <td>{{ employee.username }}</td>
+                <td>
+                    <a href="{{ url_for('edit_employee', user_id=employee.id) }}" class="btn btn-sm btn-primary neon-button">Edit</a>
+                    <a href="{{ url_for('download_employee_report', user_id=employee.id) }}" class="btn btn-sm btn-secondary neon-button">Download Report</a>
+                    <a href="{{ url_for('delete_employee', user_id=employee.id) }}" class="btn btn-sm btn-danger neon-button" onclick="return confirm('Are you sure you want to delete {{ employee.username }}?')">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No employees found.</p>
+    {% endif %}
+</div>
+{% endblock %}

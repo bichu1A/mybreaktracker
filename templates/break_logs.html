@@ -1,0 +1,64 @@
+
+{% extends 'base.html' %}
+{% block title %}View All Break Logs{% endblock %}
+{% block content %}
+<style>
+    body {
+        background-image: url('{{ url_for('static', filename='image-8.png') }}');
+        background-size: cover; /* Fully cover the screen, may crop image */
+        background-position: center; /* Center the image, adjust if needed */
+        background-repeat: no-repeat;
+        min-height: 100vh; /* Full viewport height */
+        margin: 0; /* Remove default margins */
+    }
+    .logs-container {
+        background-color: rgba(255, 255, 255, 0.6); /* Semi-transparent white background for readability */
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.2); /* Subtle shadow for container */
+    }
+    table {
+        background-color: rgba(255, 255, 255, 0.9); /* Slightly more opaque for table readability */
+    }
+</style>
+<div class="container">
+    <div class="logs-container">
+        <h1>View All Break Logs</h1>
+        <a href="{{ url_for('download_all_reports') }}" class="btn btn-secondary mb-3">Download All Reports</a>
+        {% if logs %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Employee Username</th>
+                    <th>Break Type</th>
+                    <th>Start Time (IST)</th>
+                    <th>End Time (IST)</th>
+                    <th>Duration</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.user.username }}</td>
+                    <td>{{ log.break_type }}</td>
+                    <td>{{ log.start_time | datetimefilter }}</td>
+                    <td>{{ log.end_time | datetimefilter }}</td>
+                    <td>
+                        {% if log.end_time %}
+                            {{ ((log.end_time - log.start_time).total_seconds() // 60) | int }} minute{{ 's' if ((log.end_time - log.start_time).total_seconds() // 60) | int != 1 else '' }}
+                            {{ ((log.end_time - log.start_time).total_seconds() % 60) | int }} second{{ 's' if ((log.end_time - log.start_time).total_seconds() % 60) | int != 1 else '' }}
+                        {% else %}
+                            Ongoing
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No break logs found.</p>
+        {% endif %}
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mt-3">Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

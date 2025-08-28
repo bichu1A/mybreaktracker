@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Employee Dashboard{% endblock %}
+{% block content %}
+<div class="container mt-5">
+    <h1>Welcome, {{ current_user.username }}!</h1>
+    <h2>Log a Break</h2>
+    <div class="card mb-4">
+        <div class="card-body">
+            {% if active_break %}
+            <p>Active Break: {{ active_break.break_type }} (Started: {{ active_break.start_time | datetimefilter }})</p>
+            <form method="POST">
+                <button type="submit" name="end_break" class="btn btn-danger">End Break</button>
+            </form>
+            {% else %}
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                <div class="mb-3">
+                    {{ form.break_type.label(class="form-label") }}
+                    {{ form.break_type(class="form-select") }}
+                </div>
+                {{ form.submit(class="btn btn-success") }}
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    <h2>Your Recent Breaks</h2>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Start (IST)</th>
+                <th>End (IST)</th>
+                <th>Duration</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for break in my_breaks %}
+            <tr>
+                <td>{{ break.break_type }}</td>
+                <td>{{ break.start_time | datetimefilter }}</td>
+                <td>{{ break.end_time | datetimefilter }}</td>
+                <td>
+                    {% if break.end_time %}
+                        {% set total_seconds = (break.end_time - break.start_time).total_seconds() | int %}
+                        {% set minutes = total_seconds // 60 %}
+                        {% set seconds = total_seconds % 60 %}
+                        {{ minutes }} minute{{ 's' if minutes != 1 else '' }} {{ seconds }} second{{ 's' if seconds != 1 else '' }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,92 @@
+
+{% extends 'base.html' %}
+{% block title %}Date Filtered Break Logs{% endblock %}
+{% block content %}
+<style>
+    body {
+        background-image: url('{{ url_for('static', filename='image-8.png') }}');
+        background-size: cover; /* Fully cover the screen, may crop image */
+        background-position: center; /* Center the image, adjust if needed */
+        background-repeat: no-repeat;
+        min-height: 100vh; /* Full viewport height */
+        margin: 0; /* Remove default margins */
+    }
+    .filtered-logs-container {
+        background-color: rgba(255, 255, 255, 0.6); /* Semi-transparent white background for readability */
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.2); /* Subtle shadow for container */
+    }
+    table {
+        background-color: rgba(255, 255, 255, 0.9); /* Slightly more opaque for table readability */
+    }
+</style>
+<div class="container mt-5">
+    <div class="filtered-logs-container">
+        <h1>Date Filtered Break Logs</h1>
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            {{ form.start_date.label(class="form-label") }}
+                            {{ form.start_date(class="form-control", type="date") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ form.end_date.label(class="form-label") }}
+                            {{ form.end_date(class="form-control", type="date") }}
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end mb-3">
+                            {{ form.submit(class="btn btn-primary w-100") }}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% if logs %}
+            <h3>Break Logs from {{ start_date }} to {{ end_date }}</h3>
+            <form method="POST" action="{{ url_for('download_date_filtered_report') }}">
+                {{ form.hidden_tag() }}
+                <input type="hidden" name="start_date" value="{{ start_date }}">
+                <input type="hidden" name="end_date" value="{{ end_date }}">
+                <button type="submit" class="btn btn-secondary mb-3">Download Report as CSV</button>
+            </form>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Employee Username</th>
+                        <th>Break Type</th>
+                        <th>Start Time (IST)</th>
+                        <th>End Time (IST)</th>
+                        <th>Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td>{{ log.user.username }}</td>
+                        <td>{{ log.break_type }}</td>
+                        <td>{{ log.start_time | datetimefilter }}</td>
+                        <td>{{ log.end_time | datetimefilter }}</td>
+                        <td>
+                            {% if log.end_time %}
+                                {{ ((log.end_time - log.start_time).total_seconds() // 60) | int }} minute{{ 's' if ((log.end_time - log.start_time).total_seconds() // 60) | int != 1 else '' }}
+                                {{ ((log.end_time - log.start_time).total_seconds() % 60) | int }} second{{ 's' if ((log.end_time - log.start_time).total_seconds() % 60) | int != 1 else '' }}
+                            {% else %}
+                                Ongoing
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% elif start_date and end_date %}
+            <p>No break logs found for the selected date range.</p>
+        {% else %}
+            <p>Please select a date range to view break logs.</p>
+        {% endif %}
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary mt-3">Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}
