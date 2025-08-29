@@ -22,6 +22,7 @@ from flask_migrate import Migrate
 # -------------------------------------
 app = Flask(__name__)
 
+
 # SECRET_KEY comes from env in production (Render)
 app.config['SECRET_KEY'] = os.environ.get(
     'SECRET_KEY',
@@ -154,6 +155,7 @@ class DateRangeForm(FlaskForm):
 # -------------------------------------
 # User Loader
 # -------------------------------------
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -176,6 +178,14 @@ def fmt_ist(dt):
 # -------------------------------------
 # Routes
 # -------------------------------------
+@app.before_first_request
+def create_tables_and_admin():
+    db.create_all()
+    if not User.query.filter_by(username='admin').first():
+        admin = User(username='admin', role='admin')
+        admin.set_password('admin123')  # Change immediately after first login
+        db.session.add(admin)
+        db.session.commit()
 @app.route('/')
 def index():
     return redirect(url_for('login'))
