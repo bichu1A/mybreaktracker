@@ -79,10 +79,9 @@ app.jinja_env.filters['datetimefilter'] = fmt_ist
 class User(db.Model, UserMixin):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(20), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password_hash = db.Column(db.String(512), nullable=False)  # <-- increase from 128 to 512
     role = db.Column(db.String(20), nullable=False, default='employee')
-    active = db.Column(db.Boolean, default=True)
     breaks = db.relationship('BreakLog', backref='user', lazy=True, cascade="all, delete-orphan")
 
     def set_password(self, password: str) -> None:
@@ -530,4 +529,5 @@ with app.app_context():
 # -------------------------------------
 if __name__ == '__main__':
     # On Render, gunicorn will run this app; for local dev, this line is fine.
+
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
