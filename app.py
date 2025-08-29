@@ -1,4 +1,3 @@
-# app.py
 from flask import (
     Flask, render_template, redirect, url_for, flash, request, make_response, jsonify
 )
@@ -35,8 +34,10 @@ app.config['SECRET_KEY'] = os.environ.get(
     'fallback-secret-only-for-local-dev'
 )
 
-# Database URL: Render Postgres fallback to SQLite
-db_url = os.environ.get("DATABASE_URL", "sqlite:///site.db")
+# Database URL: Enforce PostgreSQL from environment
+db_url = os.environ.get("DATABASE_URL")
+if not db_url or not db_url.startswith("postgresql://"):
+    raise ValueError("DATABASE_URL environment variable must be set and start with postgresql://")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
@@ -199,7 +200,6 @@ def login():
             flash('Invalid credentials.', 'danger')
     return render_template('login.html', form=form)
 
-
 @app.route('/logout')
 @login_required
 def logout():
@@ -254,7 +254,6 @@ def admin_dashboard():
     employees = User.query.filter_by(role='employee').order_by(User.username.asc()).all()
     return render_template('admin_dashboard.html', employees=employees)
 
-
 @app.route('/admin/add_employee', methods=['GET', 'POST'])
 @login_required
 def add_employee():
@@ -274,7 +273,6 @@ def add_employee():
             flash('Employee added successfully!', 'success')
             return redirect(url_for('admin_dashboard'))
     return render_template('add_employee.html', form=form)
-
 
 @app.route('/admin/edit_employee/<int:user_id>', methods=['GET', 'POST'])
 @login_required
@@ -308,7 +306,6 @@ def edit_employee(user_id):
         form.username.data = user.username
     return render_template('edit_employee.html', form=form, user=user)
 
-
 @app.route('/admin/delete_employee/<int:user_id>')
 @login_required
 def delete_employee(user_id):
@@ -317,13 +314,10 @@ def delete_employee(user_id):
 
     user = User.query.get_or_404(user_id)
     if user.role == 'employee':
-        # Option 1: reassign logs; Option 2: cascade delete (we set cascade on model)
-        # Here we just delete; BreakLog rows are deleted due to cascade rules.
         db.session.delete(user)
         db.session.commit()
         flash('Employee and their break logs were deleted.', 'success')
     return redirect(url_for('admin_dashboard'))
-
 
 @app.route('/admin/break_logs')
 @login_required
@@ -352,7 +346,6 @@ def date_filtered_break_logs():
             flash('Start date cannot be after end date.', 'danger')
             return render_template('date_filtered_break_logs.html', form=form, logs=logs)
 
-        # Build timezone-aware start/end datetimes in IST
         start_datetime = IST.localize(datetime.combine(start_date, datetime.min.time()))
         end_datetime = IST.localize(datetime.combine(end_date, datetime.max.time()))
 
@@ -422,7 +415,6 @@ def download_date_filtered_report():
     output.headers["Content-type"] = "text/csv"
     return output
 
-
 @app.route('/admin/download_employee_report/<int:user_id>')
 @login_required
 def download_employee_report(user_id):
@@ -459,7 +451,6 @@ def download_employee_report(user_id):
     output.headers["Content-Disposition"] = f"attachment; filename={user.username}_break_report.csv"
     output.headers["Content-type"] = "text/csv"
     return output
-
 
 @app.route('/admin/download_all_reports')
 @login_required
@@ -530,8 +521,9 @@ def page_not_found(e):
 # -------------------------------------
 # One-time DB bootstrap (create tables + default admin)
 # -------------------------------------
-#----------------------
-
+with app.app_context():
+    db.create_all()
+    init_db_and_admin()
 
 # -------------------------------------
 # Entrypoint
