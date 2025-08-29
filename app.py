@@ -1,6 +1,6 @@
 # app.py
 from flask import (
-    Flask, render_template, redirect, url_for, flash, request, make_response
+    Flask, render_template, redirect, url_for, flash, request, make_response, jsonify
 )
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
@@ -8,7 +8,7 @@ from flask_login import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, SelectField, DateField
+from wtforms import StringField, PasswordField, SubmitField, SelectField, DateField, BooleanField
 from wtforms.validators import DataRequired, Length, EqualTo, Optional
 from datetime import datetime, timedelta
 import pytz
@@ -16,49 +16,61 @@ import os
 import csv
 from io import StringIO
 from flask_migrate import Migrate
+import logging
+
+# ----------------------------
+# Logging configuration
+# ----------------------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # -------------------------------------
 # Flask App & Config
 # -------------------------------------
 app = Flask(__name__)
 
-
 # SECRET_KEY comes from env in production (Render)
 app.config['SECRET_KEY'] = os.environ.get(
     'SECRET_KEY',
-    'fallback-secret-only-for-local-dev'  # do NOT use this in production
+    'fallback-secret-only-for-local-dev'
 )
 
-# Database: use Render's DATABASE_URL (Postgres). Fallback to local sqlite for dev.
+# Database URL: Render Postgres fallback to SQLite
 db_url = os.environ.get("DATABASE_URL", "sqlite:///site.db")
-# Render / SQLAlchemy fix: some providers still emit postgres://
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
-
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Initialize SQLAlchemy
+# ----------------------------
+# Initialize DB and Migrate
+# ----------------------------
 db = SQLAlchemy(app)
-# Initialize Flask-Migrate
 migrate = Migrate(app, db)
 
-# -------------------------------------
+# ----------------------------
 # Login Manager
-# -------------------------------------
+# ----------------------------
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+login_manager.login_message_category = 'info'
 
-# -------------------------------------
-# Jinja Filter (IST timestamp display)
-# -------------------------------------
-def datetimefilter(value):
-    if value:
-        return value.strftime('%Y-%m-%d %H:%M:%S') + ' IST'
-    return 'N/A'
+# ----------------------------
+# Timezone
+# ----------------------------
+IST = pytz.timezone('Asia/Kolkata')
 
-app.jinja_env.filters['datetimefilter'] = datetimefilter
+def now_ist():
+    return datetime.now(IST)
+
+def fmt_ist(dt):
+    return dt.strftime('%Y-%m-%d %H:%M:%S') + ' IST' if dt else 'N/A'
+
+# ----------------------------
+# Jinja Filters
+# ----------------------------
+app.jinja_env.filters['datetimefilter'] = fmt_ist
 
 # -------------------------------------
 # Database Models
@@ -68,11 +80,10 @@ class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(20), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default='employee')  # 'admin' or 'employee'
-    # relationship
+    role = db.Column(db.String(20), nullable=False, default='employee')
+    active = db.Column(db.Boolean, default=True)
     breaks = db.relationship('BreakLog', backref='user', lazy=True, cascade="all, delete-orphan")
 
-    # password helpers
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
 
@@ -82,17 +93,24 @@ class User(db.Model, UserMixin):
     def __repr__(self):
         return f"<User {self.username} ({self.role})>"
 
-
 class BreakLog(db.Model):
     __tablename__ = 'break_log'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
     break_type = db.Column(db.String(50), nullable=False)
-    start_time = db.Column(db.DateTime, nullable=False)  # stored as timezone-aware IST datetime
-    end_time = db.Column(db.DateTime)                    # nullable until break is ended
+    start_time = db.Column(db.DateTime, nullable=False)
+    end_time = db.Column(db.DateTime)
+
+    def duration(self):
+        if self.end_time:
+            delta = self.end_time - self.start_time
+            minutes = delta.seconds // 60
+            seconds = delta.seconds % 60
+            return f"{minutes}m {seconds}s"
+        return "Ongoing"
 
     def __repr__(self):
-        return f"<BreakLog id={self.id} type={self.break_type} user_id={self.user_id}>"
+        return f"<BreakLog {self.break_type} by {self.user_id}>"
 
 # -------------------------------------
 # Forms
@@ -102,50 +120,33 @@ class LoginForm(FlaskForm):
     password = PasswordField('Password', validators=[DataRequired()])
     submit = SubmitField('Login')
 
-
 class AddEmployeeForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=4, max=20)])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
-    confirm_password = PasswordField(
-        'Confirm Password',
-        validators=[DataRequired(), EqualTo('password', message='Passwords must match')]
-    )
+    confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Add Employee')
-
-
-class BreakForm(FlaskForm):
-    break_type = SelectField(
-        'Break Type',
-        choices=[
-            ('1st Break', '1st Break'),
-            ('2nd Break', '2nd Break'),
-            ('Dinner Break', 'Dinner Break'),
-            ('Bathroom Break', 'Bathroom Break')
-        ],
-        validators=[DataRequired()]
-    )
-    submit = SubmitField('Start Break')
-
-
-class ChangePasswordForm(FlaskForm):
-    current_password = PasswordField('Current Password', validators=[DataRequired()])
-    new_password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
-    confirm_password = PasswordField(
-        'Confirm New Password',
-        validators=[DataRequired(), EqualTo('new_password', message='Passwords must match')]
-    )
-    submit = SubmitField('Change Password')
-
 
 class EditEmployeeForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=2, max=150)])
     new_password = PasswordField('New Password', validators=[Optional(), Length(min=6)])
-    confirm_password = PasswordField(
-        'Confirm New Password',
-        validators=[Optional(), EqualTo('new_password', message='Passwords must match')]
-    )
+    confirm_password = PasswordField('Confirm New Password', validators=[Optional(), EqualTo('new_password')])
+    active = BooleanField('Active')
     submit = SubmitField('Update Employee')
 
+class BreakForm(FlaskForm):
+    break_type = SelectField('Break Type', choices=[
+        ('1st Break','1st Break'),
+        ('2nd Break','2nd Break'),
+        ('Dinner Break','Dinner Break'),
+        ('Bathroom Break','Bathroom Break')
+    ], validators=[DataRequired()])
+    submit = SubmitField('Start Break')
+
+class ChangePasswordForm(FlaskForm):
+    current_password = PasswordField('Current Password', validators=[DataRequired()])
+    new_password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField('Confirm New Password', validators=[DataRequired(), EqualTo('new_password')])
+    submit = SubmitField('Change Password')
 
 class DateRangeForm(FlaskForm):
     start_date = DateField('Start Date', validators=[DataRequired()], format='%Y-%m-%d')
@@ -153,59 +154,49 @@ class DateRangeForm(FlaskForm):
     submit = SubmitField('View Report')
 
 # -------------------------------------
-# User Loader
+# Load User
 # -------------------------------------
-
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 # -------------------------------------
-# Helpers
+# Initialization Function
 # -------------------------------------
-IST = pytz.timezone('Asia/Kolkata')
-
-def now_ist():
-    """Return current timezone-aware datetime in IST."""
-    return datetime.now(IST)
-
-def fmt_ist(dt):
-    """Format a datetime as 'YYYY-MM-DD HH:MM:SS IST' or 'N/A'."""
-    if not dt:
-        return 'N/A'
-    return dt.strftime('%Y-%m-%d %H:%M:%S') + ' IST'
+def init_db_and_admin():
+    """Initialize DB and create default admin if not exists."""
+    with app.app_context():
+        db.create_all()
+        if not User.query.filter_by(username='admin').first():
+            admin = User(username='admin', role='admin', active=True)
+            admin.set_password('admin123')
+            db.session.add(admin)
+            db.session.commit()
+            logger.info("Default admin created with username: 'admin', password: 'admin123'")
 
 # -------------------------------------
-# Routes
+# Routes: Auth
 # -------------------------------------
-@app.before_first_request
-def create_tables_and_admin():
-    db.create_all()
-    if not User.query.filter_by(username='admin').first():
-        admin = User(username='admin', role='admin')
-        admin.set_password('admin123')  # Change immediately after first login
-        db.session.add(admin)
-        db.session.commit()
 @app.route('/')
 def index():
     return redirect(url_for('login'))
 
-# ---------- Auth ----------
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET','POST'])
 def login():
-    # If already logged in, redirect appropriately
     if current_user.is_authenticated:
-        return redirect(url_for('admin_dashboard' if current_user.role == 'admin' else 'employee_dashboard'))
-
+        return redirect(url_for('admin_dashboard') if current_user.role=='admin' else 'employee_dashboard')
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data.strip()).first()
         if user and user.check_password(form.password.data):
-            login_user(user)
-            flash('Login successful!', 'success')
-            return redirect(url_for('admin_dashboard' if user.role == 'admin' else 'employee_dashboard'))
+            if not user.active:
+                flash('Account inactive. Contact admin.', 'danger')
+            else:
+                login_user(user)
+                flash('Login successful!', 'success')
+                return redirect(url_for('admin_dashboard') if user.role=='admin' else 'employee_dashboard')
         else:
-            flash('Invalid username or password.', 'danger')
+            flash('Invalid credentials.', 'danger')
     return render_template('login.html', form=form)
 
 
