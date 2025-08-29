@@ -15,6 +15,7 @@ import pytz
 import os
 import csv
 from io import StringIO
+from flask_migrate import Migrate
 
 # -------------------------------------
 # Flask App & Config
@@ -38,6 +39,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize SQLAlchemy
 db = SQLAlchemy(app)
+# Initialize Flask-Migrate
+migrate = Migrate(app, db)
 
 # -------------------------------------
 # Login Manager
@@ -526,14 +529,8 @@ def page_not_found(e):
 # -------------------------------------
 # One-time DB bootstrap (create tables + default admin)
 # -------------------------------------
-with app.app_context():
-    db.create_all()
-    # Seed default admin on first run only
-    if not User.query.filter_by(username='admin').first():
-        admin = User(username='admin', role='admin')
-        admin.set_password('admin123')  # change after first login
-        db.session.add(admin)
-        db.session.commit()
+#----------------------
+
 
 # -------------------------------------
 # Entrypoint
