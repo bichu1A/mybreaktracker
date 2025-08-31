@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: mybreaktracker  # Replace with your service name
+    env: python
+    buildCommand: pip install -r requirements.txt && flask db upgrade
+    startCommand: gunicorn app:app
+    envVars:
+      - key: FLASK_APP
+        value: app.py  # Adjust if needed
+      - key: DATABASE_URL
+        fromDatabase:
+          name:  mybreaktracker-db # Your Render Postgres instance name
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true  # Or set a value
+databases:
+  - name: your-db-name
+    databaseName: your_db  # Optional: custom DB name
+    user: your_user  # Optional: custom usermybreaktracker-db
