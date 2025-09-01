@@ -185,7 +185,7 @@ def index():
 @app.route('/login', methods=['GET','POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('admin_dashboard') if current_user.role=='admin' else 'employee_dashboard')
+        return redirect(url_for('admin_dashboard' if current_user.role=='admin' else 'employee_dashboard'))
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data.strip()).first()
@@ -195,7 +195,7 @@ def login():
             else:
                 login_user(user)
                 flash('Login successful!', 'success')
-                return redirect(url_for('admin_dashboard') if user.role=='admin' else 'employee_dashboard')
+                return redirect(url_for('admin_dashboard' if user.role=='admin' else 'employee_dashboard'))
         else:
             flash('Invalid credentials.', 'danger')
     return render_template('login.html', form=form)
@@ -208,7 +208,7 @@ def logout():
     return redirect(url_for('login'))
 
 # ---------- Employee ----------
-@app.route('/employee/dashboard', methods=['GET', 'POST'])
+@app.route('/employee_dashboard', methods=['GET', 'POST'])
 @login_required
 def employee_dashboard():
     if current_user.role != 'employee':
@@ -246,7 +246,7 @@ def employee_dashboard():
     return render_template('employee_dashboard.html', form=form, active_break=active_break, my_breaks=my_breaks)
 
 # ---------- Admin ----------
-@app.route('/admin/dashboard')
+@app.route('/admin_dashboard')
 @login_required
 def admin_dashboard():
     if current_user.role != 'admin':
@@ -532,5 +532,6 @@ if __name__ == '__main__':
     # On Render, gunicorn will run this app; for local dev, this line is fine.
 
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+
 
 
